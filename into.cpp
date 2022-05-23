@@ -18,6 +18,13 @@
 #include <array>
 #include <optional>
 #include <set>
+#include <spdlog/spdlog.h>
+
+template <typename... Args>
+void log(Args &&...args)
+{
+    (std::cout << ... << args);
+}
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -78,16 +85,20 @@ struct SwapChainSupportDetails
 
 struct Vertex
 {
+    /////////////////////////////////////////////
+    /////////////////////////////////////////////
     glm::vec2 pos;
     glm::vec3 color;
-
+    glm::vec3 strength; 
+    /////////////////////////////////////////////////
+    ////////////////////////////////////////////////
     static VkVertexInputBindingDescription getBindingDescription()
     {
         VkVertexInputBindingDescription bindingDescription{};
         bindingDescription.binding = 0;
         bindingDescription.stride = sizeof(Vertex);
         bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
+        spdlog::info ("size of Vertex(struct): " + sizeof(Vertex)); 
         return bindingDescription;
     }
 
@@ -108,12 +119,14 @@ struct Vertex
         return attributeDescriptions;
     }
 };
-
+/////////////////////////////////////////////////////////////////////////////////\
+//////////////////////////////////////////////////////////////////////////////////
 struct UniformBufferObject
 {
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 proj;
+    alignas(16) glm::mat4 time; //to be used for 'scratch' data --> assign time per update, delta times? what other ideas can we find with 16 values
 };
 
 const std::vector<Vertex> vertices = {
@@ -124,6 +137,9 @@ const std::vector<Vertex> vertices = {
 
 const std::vector<uint16_t> indices = {
     0, 1, 2, 2, 3, 0};
+
+    /////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
 
 class HelloTriangleApplication
 {
@@ -781,9 +797,11 @@ private:
             throw std::runtime_error("failed to create graphics command pool!");
         }
     }
-
+    ///////////////////////////////
+    ///////////////////////////////////
     void createVertexBuffer()
     {
+        spdlog::info("we are creating vertex buffers....vertices being used --> void createVertexBuffer (line 796)"); 
         VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
         VkBuffer stagingBuffer;
@@ -802,9 +820,11 @@ private:
         vkDestroyBuffer(device, stagingBuffer, nullptr);
         vkFreeMemory(device, stagingBufferMemory, nullptr);
     }
-
+    //////////////////////////////////////////////////
+    //////////////////////////////////////////////////
     void createIndexBuffer()
     {
+        spdlog::info("we are creating index buffer"); 
         VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
         VkBuffer stagingBuffer;
@@ -1001,11 +1021,13 @@ private:
         renderPassInfo.framebuffer = swapChainFramebuffers[imageIndex];
         renderPassInfo.renderArea.offset = {0, 0};
         renderPassInfo.renderArea.extent = swapChainExtent;
-
+        //////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////
         VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
         renderPassInfo.clearValueCount = 1;
         renderPassInfo.pClearValues = &clearColor;
-
+        /////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////
         vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
         vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
@@ -1052,19 +1074,33 @@ private:
         }
     }
 
+/*Main UBO (uniformBufferObject) update this function for rotation values, camera gimbals 
+*/ 
     void updateUniformBuffer(uint32_t currentImage)
     {
         static auto startTime = std::chrono::high_resolution_clock::now();
 
         auto currentTime = std::chrono::high_resolution_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
+        ///////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////
         UniformBufferObject ubo{};
         ubo.model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         ubo.view = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
         ubo.proj = glm::perspective(glm::radians(45.0f), swapChainExtent.width / (float)swapChainExtent.height, 0.1f, 10.0f);
         ubo.proj[1][1] *= -1;
+        ////////DIY with 4x4 matrix ==> assign 'time' matrix --=> one value for current time 
+        ///use delta times? gradients? what kernel can we create and affect -col, pos-, with 
+        glm::fvec4 Time = glm::fvec4(time, time, time, time) ; 
+        glm::fmat4 TimeMatrix = glm::fmat4(Time, Time, Time, Time); 
+        ubo.time = TimeMatrix; 
+        std::cout<<ubo.time[0][0]<<"this is time"<<std::endl; 
+        std::cout<<sin(ubo.time[0][0])<<"sin of time"<<std::endl; 
+        
 
+         
+        //////////////////////////////////////////////////////////////////
+        //////////////////////////////////////////////////////////////////
         void *data;
         vkMapMemory(device, uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0, &data);
         memcpy(data, &ubo, sizeof(ubo));
